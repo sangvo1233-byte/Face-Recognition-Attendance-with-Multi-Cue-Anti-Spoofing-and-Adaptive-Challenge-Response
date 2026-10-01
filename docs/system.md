@@ -2,7 +2,7 @@
 
 ## Version boundary
 
-This document describes the web V4.4 implementation at commit `4a38c61e37db70c6d3431d683fd96b6c04bc4c90` of [face-reg-final-project](https://github.com/sangvo1233-byte/face-reg-final-project). V4.4 is the selected final version for the project report. “Final” identifies the reporting baseline; it does not establish production readiness or measured effectiveness.
+This document describes the web V4.4 implementation at commit `4a38c61e37db70c6d3431d683fd96b6c04bc4c90` of [Face Recognition Attendance with Multi-Cue Anti-Spoofing and Adaptive Challenge-Response](https://github.com/sangvo1233-byte/Face-Recognition-Attendance-with-Multi-Cue-Anti-Spoofing-and-Adaptive-Challenge-Response). V4.4 is the selected final version for the project report. “Final” identifies the reporting baseline; it does not establish production readiness or measured effectiveness.
 
 The canonical decision code is `core/runtime_v4.py` with detectors in `core/detect_v4.py`. The independent OpenCV scanner `dev/detect-v4.4.py` is a development artifact, not an interchangeable description of the web runtime.
 
@@ -77,7 +77,7 @@ In `_process_face`, the existing gate order is:
 8. Report unknown if the identity match does not pass.
 9. Assess the need for a challenge; otherwise record attendance.
 
-The order matters. A strong signal can cause rejection before the challenge policy is consulted. The system does not always offer a challenge to every rejected attempt. [Canonical gate implementation](https://github.com/sangvo1233-byte/face-reg-final-project/blob/4a38c61e37db70c6d3431d683fd96b6c04bc4c90/core/runtime_v4.py#L320).
+The order matters. A strong signal can cause rejection before the challenge policy is consulted. The system does not always offer a challenge to every rejected attempt. [Canonical gate implementation](https://github.com/sangvo1233-byte/Face-Recognition-Attendance-with-Multi-Cue-Anti-Spoofing-and-Adaptive-Challenge-Response/blob/4a38c61e37db70c6d3431d683fd96b6c04bc4c90/core/runtime_v4.py#L320).
 
 ## Adaptive challenge policy
 

@@ -4,7 +4,7 @@
 
 This project combines face recognition with image and temporal checks before recording attendance. When an identified face remains suspicious after the rejection checks, the backend may request a short sequence of user actions.
 
-This repository contains the FastAPI application, browser dashboard, tests, retained development scanners, and an IEEE-style report. The report describes application behavior at commit [`4a38c61`](https://github.com/sangvo1233-byte/face-reg-final-project/commit/4a38c61e37db70c6d3431d683fd96b6c04bc4c90); the documentation commits do not change the V4.4 algorithms.
+This repository contains the FastAPI application, browser dashboard, tests, retained development scanners, and an IEEE-style report. The report describes application behavior at commit [`4a38c61`](https://github.com/sangvo1233-byte/Face-Recognition-Attendance-with-Multi-Cue-Anti-Spoofing-and-Adaptive-Challenge-Response/commit/4a38c61e37db70c6d3431d683fd96b6c04bc4c90); the documentation commits do not change the V4.4 algorithms.
 
 ## Read first
 
