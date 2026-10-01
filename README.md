@@ -12,8 +12,8 @@ This repository contains the FastAPI application, browser dashboard, tests, reta
 | --- | --- |
 | [System and method](docs/system.md) | Architecture, enrollment, signals, decision order, and V4.4 parameters. |
 | [Evaluation protocol](docs/evaluation.md) | A proposed evaluation of the existing implementation and the current evidence limits. |
-| [IEEE-style report](paper/main.tex) | Standalone English LaTeX draft with inline figures and references. |
-| [Compiled report](paper/main.pdf) | Verified four-page A4 PDF of the current draft. |
+| [IEEE-style report](paper/main.tex) | Editable English LaTeX source in IEEE format, with figures and references. |
+| [Compiled report](paper/main.pdf) | Verified four-page A4 PDF of the final report. |
 | [Development history](dev/README.md) | How to interpret the retained experimental scripts and older implementations. |
 
 ## Current evidence status
