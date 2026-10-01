@@ -4,7 +4,7 @@
 
 This project combines face recognition with image and temporal checks before recording attendance. When an identified face remains suspicious after the rejection checks, the backend may request a short sequence of user actions.
 
-This repository contains the FastAPI application, browser dashboard, tests, retained development scanners, and an IEEE-style report. The report describes application behavior at commit [`4a38c61`](https://github.com/sangvo1233-byte/Face-Recognition-Attendance-with-Multi-Cue-Anti-Spoofing-and-Adaptive-Challenge-Response/commit/4a38c61e37db70c6d3431d683fd96b6c04bc4c90); the documentation commits do not change the V4.4 algorithms.
+This repository contains the FastAPI application, browser dashboard, tests, retained development scanners, and a technical report. The report describes application behavior at commit [`4a38c61`](https://github.com/sangvo1233-byte/Face-Recognition-Attendance-with-Multi-Cue-Anti-Spoofing-and-Adaptive-Challenge-Response/commit/4a38c61e37db70c6d3431d683fd96b6c04bc4c90); the documentation commits do not change the V4.4 algorithms.
 
 ## Read first
 
@@ -12,7 +12,7 @@ This repository contains the FastAPI application, browser dashboard, tests, reta
 | --- | --- |
 | [System and method](docs/system.md) | Architecture, enrollment, signals, decision order, and V4.4 parameters. |
 | [Evaluation protocol](docs/evaluation.md) | A proposed evaluation of the existing implementation and the current evidence limits. |
-| [IEEE-style report](paper/main.tex) | Editable English LaTeX source in IEEE format, with figures and references. |
+| [Technical report source](paper/main.tex) | Editable English LaTeX source with figures and references. |
 | [Compiled report](paper/main.pdf) | Verified four-page A4 PDF of the final report. |
 | [Development history](dev/README.md) | How to interpret the retained experimental scripts and older implementations. |
 
