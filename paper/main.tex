@@ -1,0 +1,232 @@
+% Set the encoding before IEEEtran initializes its Times font shapes.
+\RequirePackage[T1]{fontenc}
+\documentclass[conference,a4paper]{IEEEtran}
+\usepackage{amsmath,amssymb}
+\usepackage{array}
+\usepackage{balance}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+
+% Standalone source: references and diagrams are embedded.
+% The author name was supplied by the project owner; no affiliation was supplied.
+\title{Face Recognition Attendance with Multi-Cue Anti-Spoofing and Adaptive Challenge--Response}
+\author{\IEEEauthorblockN{Vo Minh Sang}}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Face recognition can associate a camera observation with an enrolled identity, but an identity match alone does not establish that the person is physically present. This report documents a camera-based attendance implementation that combines pretrained face recognition with passive image heuristics, temporal landmark tracking, screen-context evidence, and a rule-based challenge--response policy. The selected final implementation is the web V4.4 runtime, shared by browser-camera and server-webcam capture modes. Candidates that pass rejection gates and identity matching may receive a two-action challenge selected according to suspicion severity. The report explains enrollment, signal interpretation, decision order, challenge verification, and the separation between similarity scores and performance metrics. It also defines an evaluation protocol for genuine users and print or display replay attempts. No empirical dataset or measured results have been supplied for this version. Consequently, this document presents the implemented design and its evidence limits without claiming a measured reduction in spoof acceptance, recognition errors, or processing time.
+\end{abstract}
+
+\begin{IEEEkeywords}
+face recognition, attendance systems, presentation attack detection, liveness detection, challenge--response
+\end{IEEEkeywords}
+
+\section{Introduction}
+An automated attendance system must determine both identity and presence. A face matcher addresses identity by comparing an observation with stored templates. A photograph or displayed video may nevertheless contain recognizable identity information. Attendance therefore requires additional evidence before an identity match is accepted as presence.
+
+ArcFace describes a training objective for discriminative face representations~\cite{arcface}. Face detection methods such as SCRFD locate faces before recognition~\cite{scrfd}. These capabilities are useful components, but their recognition or detection benchmarks do not measure whether an attendance workflow rejects presentation attacks. The distinction between recognizing a face and detecting an attack is central to interpreting the present implementation~\cite{padintro}.
+
+This project uses a standard color camera and integrates several image and temporal cues. Suspicious candidates may be asked to perform an action sequence. The report asks how these mechanisms are connected in the final implementation and what evidence is still required to assess their effectiveness.
+
+Its documented contribution is the integration of existing recognition and landmark models with heuristic checks, a stateful decision procedure, and suspicion-dependent challenge selection. It does not introduce a newly trained recognition model or a learned challenge policy. The report provides a traceable explanation of the implementation and an evaluation plan; it makes no comparative performance claim.
+
+\section{Background and Study Scope}
+\subsection{Identity, Presentation, and Interaction}
+A facial embedding is a vector of identity features. Comparing normalized embeddings can support identity matching. Presentation attack detection concerns whether the captured observation represents a genuine presentation or an artifact intended to interfere with the biometric process. Print and display replay attempts are examples of the latter~\cite{padintro,nistpad}.
+
+Passive checks inspect the acquired imagery without requesting an additional action. An active challenge adds an instruction and verifies a response. Neither the existence of an image cue nor a successful interaction automatically establishes attack coverage: the complete workflow must be tested against a specified attack population.
+
+\subsection{Reporting Baseline}
+The implementation under discussion is the web V4.4 runtime at repository commit \texttt{4a38c61}~\cite{repository}. Both browser and local-camera modes feed the same backend decision code. The retained V1/V3 routes and standalone development scanners are historical or compatibility surfaces; their parameters and outcomes are not substituted for those of the selected final runtime.
+
+The intended evaluation includes genuine presentations, printed photographs, static images on displays, and prerecorded display replay. Resistance to masks, real-time face swaps, digital injection, and backend attacks has not been established. The source review is not a deployment assessment.
+
+\section{System Design}
+\subsection{Components and Responsibility}
+The application contains a FastAPI backend, a browser dashboard, a face-analysis engine, a landmark tracker, image-based detectors, and SQLite storage. Browser frames enter through a WebSocket route. A second mode uses the webcam physically attached to the server. A shared runtime maintains observation history and decides whether to continue tracking, reject, request a challenge, or record attendance.
+
+The interface renders backend events and action instructions. It does not independently decide whether the attendance conditions have been met. The single-frame compatibility endpoint creates a short-lived runtime and is not an equivalent evaluation path for stateful stream behavior.
+
+\begin{figure}[t]
+\centering
+\fbox{\begin{minipage}{0.90\columnwidth}
+\centering
+Browser camera or server webcam\\[2pt]
+$\downarrow$\\[2pt]
+Shared stateful V4.4 runtime\\[2pt]
+$\downarrow$\\[2pt]
+Identity features and image/temporal cues\\[2pt]
+$\downarrow$\\[2pt]
+Reject, continue tracking, or assess challenge\\[2pt]
+$\downarrow$\\[2pt]
+Admitted attendance and dashboard events
+\end{minipage}}
+\caption{Conceptual system flow. Computing an identity match does not authorize attendance. Admission depends on the subsequent gates and any required challenge.}
+\label{fig:system}
+\end{figure}
+
+\subsection{Enrollment}
+Enrollment captures front, left, and right views. The service checks face availability, image blur, and the requested pose. When several valid images are supplied for a view, it averages their normalized embeddings and normalizes the resulting vector:
+\begin{equation}
+\mathbf{v}_{a}=\frac{\bar{\mathbf{e}}_{a}}{\|\bar{\mathbf{e}}_{a}\|_2},\qquad
+\bar{\mathbf{e}}_{a}=\frac{1}{n_a}\sum_{i=1}^{n_a}\mathbf{e}_{a,i},
+\end{equation}
+where $a$ denotes a view and $n_a$ is the number of accepted images. The expression assumes a nonzero mean vector; the implementation guards normalization when its norm is zero. All three views must satisfy the enrollment checks before the replacement template set is stored.
+
+The use of several views is an implementation choice intended to cover pose variation. Its effect on recognition outcomes has not been measured in this report.
+
+\subsection{Identity Matching}
+The configured InsightFace package is \texttt{buffalo\_l}. Its documented detection component is SCRFD-10GF~\cite{modelzoo}. The actual downloaded model filenames and checksums remain to be recorded for an empirical study. Pretrained models are reused rather than trained by this project.
+
+For a normalized query embedding $\mathbf{e}$ and stored vectors $\mathbf{v}_j$, the matcher calculates
+\begin{equation}
+s_j=\mathbf{v}_j^{\mathsf T}\mathbf{e},\qquad j^*=\operatorname*{arg\,max}_{j}s_j.
+\end{equation}
+The identity associated with $j^*$ passes matching if $s_{j^*}\geq\tau_{\mathrm{id}}$, with the inspected V4.4 default $\tau_{\mathrm{id}}=0.52$. This operation selects a stored template, including multiple templates belonging to one student; it does not implement an identity-level voting rule.
+
+The field named \texttt{confidence} in the existing interface is derived from this similarity. Converting it to a percentage does not make it a probability of correct identification. Detection confidence, match similarity, and measured recognition accuracy are distinct quantities.
+
+\section{Multi-Cue Decision Procedure}
+\subsection{Passive Image Evidence}
+The passive checker combines texture, reflection, and color heuristics. Texture is summarized through a local binary pattern histogram; reflection uses bright regions and image gradients; color uses a skin-color distribution check. The combined score is
+\begin{equation}
+p=0.4t+0.3r+0.3c,
+\end{equation}
+where $t$, $r$, and $c$ are the implemented heuristic scores. Smaller $p$ indicates greater suspicion. The stream procedure reuses passive block and suspicion thresholds of 0.32 and 0.50. These weights and thresholds are source settings, not validated estimates of attack likelihood.
+
+\subsection{Screen and Temporal Evidence}
+The moire detector analyzes an expanded face region. Its enhanced preprocessing uses luminance, a logarithmic transform, high-pass filtering, gradient magnitude, and normalization before Fourier analysis. Features summarize spectral peaks, periodicity, anisotropy, and grid-like structure. The implemented screen evidence is
+\begin{equation}
+d=\operatorname{clip}_{[0,1]}(0.50f_p+0.34f_q+0.10f_a+0.06f_g).
+\end{equation}
+The raw moire score is $1-d$, so a smaller score indicates stronger screen suspicion. A median over up to seven observations and a rolling decision window of up to eighteen observations provide temporal history. Current default suspicion and block thresholds are 0.60 and 0.45, respectively.
+
+Separate detectors analyze flat-background/glare context and phone-like rectangular geometry. Their higher scores indicate greater suspicion, unlike the moire score. Rolling phone evidence can trigger rejection after two strong samples. These observations can be correlated; the decision rules do not assume a calibrated probabilistic fusion.
+
+The temporal tracker uses landmarks from MediaPipe~\cite{mediapipe}. Its live state requires an observed blink together with at least two seconds of tracking and twelve tracked frames under the inspected defaults. These frames need not all occur after the blink. Lighting changes can delay the decision. A blink observed in a replay remains possible, which motivates the additional evidence. The landmark model estimates geometry from color imagery; the system has no physical depth sensor.
+
+\begin{table}[t]
+\caption{Interpretation of the Main Signals}
+\label{tab:signals}
+\centering
+\small
+\begin{tabular}{@{}p{0.30\columnwidth}p{0.64\columnwidth}@{}}
+\hline
+Signal & Meaning and caution \\
+\hline
+Match similarity & Larger favors a stored identity; not an accuracy estimate. \\
+Passive score & Larger favors a live interpretation; heuristic image assumptions. \\
+Moire score & Smaller favors a screen interpretation; artifact visibility varies. \\
+Context/rectangle & Larger indicates suspicion; real backgrounds may resemble cues. \\
+Temporal state & Tracks blink and observation conditions; replay can contain motion. \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Gates Before a Challenge}
+The runtime first applies rejection conditions. Blocking moire evidence or a temporal spoof state rejects an attempt. Strong screen context combined with suspicious moire or passive evidence can also reject. Phone evidence rejects when its rolling decision blocks or when strong current geometry combines with another suspicious cue. A blocking passive score is another rejection condition.
+
+If none of these gates rejects, the runtime waits until temporal liveness is live. It then requires a known identity before assessing the challenge policy. Although matching is computed earlier in the source, its result does not bypass the gates. A strongly suspicious presentation can therefore be rejected without receiving a challenge.
+
+\subsection{Rule-Based Adaptive Selection}
+For a candidate reaching challenge assessment, the implementation collects suspicious reasons $S$ and strong reasons $H$. Its severity is
+\begin{equation}
+\sigma=\begin{cases}
+\text{strong},& |H|\geq1,\\
+\text{medium},& |H|=0\text{ and }|S|\geq2,\\
+\text{none},& \text{otherwise}.
+\end{cases}
+\end{equation}
+Two recent challenge failures contribute a strong reason within the runtime session. Current-frame and rolling evidence may contribute related reasons, so this count is not a count of statistically independent sensors.
+
+Medium severity selects from four sequences: left turn then mouth opening; right turn then mouth opening; upward look then left turn; or upward look then right turn. The strong pool includes these and five additional sequences involving centered stability, turns, upward/downward looks, and mouth opening. Selection uses the existing random-choice operation.
+
+Both pools contain two-action sequences. The policy adapts the available sequence set, not its length, and does not learn from outcomes. A larger pool does not establish greater attack resistance without measurement. A recent successful challenge can suppress another challenge for the same identity for twelve seconds; the preceding admission gates still apply.
+
+\subsection{Response Verification and Attendance}
+During a challenge, a usable face must match the candidate identity before action progress is counted. An identity mismatch reports progress feedback without advancing the action. Moire evidence is checked again. Pose and expression baselines support action-specific checks, and the implementation requires consecutive valid frames. Between actions, the subject must return to the neutral pose.
+
+The challenge starts with a seven-second deadline, which is not reset on step advancement in the inspected implementation. Completion records attendance through the existing service; failure or timeout returns an unsuccessful challenge event. The ordinary scan path can instead record attendance when all gates pass and no additional challenge is required.
+
+Challenge state is process-local. The event stream distinguishes ongoing observation, unknown identity, suspicion/rejection, challenge progress, and attendance results. This stateful behavior explains why a single uploaded image is not an adequate evaluation of the final pipeline.
+
+\section{Evaluation Protocol and Evidence Status}
+\subsection{Available Evidence}
+The source snapshot establishes the implemented control flow and parameter defaults. The focused software tests in \texttt{test\_detect\_v4.py} and \texttt{test\_v2\_v3.py} passed during documentation integration. These checks use mocks or synthetic inputs and do not establish measured performance of the final web V4.4 system. The camera application and empirical protocol were not executed.
+
+\begin{table}[t]
+\caption{Evidence Status of This Report}
+\label{tab:evidence}
+\centering
+\small
+\begin{tabular}{@{}p{0.57\columnwidth}p{0.37\columnwidth}@{}}
+\hline
+Evidence item & Status \\
+\hline
+Pinned source description & Inspected \\
+Focused software tests & Passed; camera not run \\
+Empirical dataset & Not supplied \\
+Attack classification errors & Not measured \\
+Recognition outcomes & Not measured \\
+Completion time and FPS & Not measured \\
+Benefit of individual cues & Not established \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Proposed Trial Procedure}
+A future study should freeze the source version, models, dependencies, thresholds, hardware, image settings, and capture mode. Enrollment images should come from recordings separate from evaluation attempts. Any threshold calibration should use a separate subset; adjacent frames from one recording should not be split into nominally independent samples.
+
+Trials should cover genuine enrolled users, unknown identities, printed photographs, static display images, and prerecorded display replay. Record device and lighting conditions, predicted identity, final outcome, rejection reason, selected challenge, timeout/nonresponse, and completion time. Participant consent and applicable institutional review status must be documented from real records before a study is reported.
+
+Challenge evaluation needs live interaction or complete recorded sessions containing both instructions and responses. An offline video cannot establish a genuine response to an unseen random instruction. Fresh-state independent trials and repeated attempts should be separated, since recent passes and failure history can change subsequent decisions. Dedicated test data and sessions should be used instead of modifying normal attendance data.
+
+\subsection{Classification and Operational Outcomes}
+NIST distinguishes attack presentation classification error rate (APCER), bona fide presentation classification error rate (BPCER), and nonresponse measures~\cite{nistpad}. For a declared responding-trial convention, the proposed study can calculate
+\begin{align}
+\mathrm{APCER}_k&=\frac{n_{\mathrm{attack}\rightarrow\mathrm{genuine},k}}{n_{\mathrm{attack,responding},k}},\\
+\mathrm{BPCER}&=\frac{n_{\mathrm{genuine}\rightarrow\mathrm{attack}}}{n_{\mathrm{genuine,responding}}},
+\end{align}
+where $k$ identifies an attack category. Nonresponses must be reported separately with the denominator policy. Zero-denominator quantities are not applicable, not zero error. This protocol does not claim certification against a biometric standard.
+
+Subsystem labels must be derived from observable decisions. A wrong or unknown identity is not necessarily a PAD error. If a distinct PAD outcome cannot be recovered, report the end-to-end outcome instead. End-to-end attack admission is the fraction of all attack attempts that obtain attendance for the target identity. Genuine completion is the fraction of genuine attempts correctly completing attendance, including failures and timeouts in its denominator.
+
+Also report correct/wrong/unknown identity counts, challenge burden, completion-time distributions, and nonresponse reasons. Rates should include counts and denominators. Repeated frames are not independent trials. Configured target rates, timestamp-derived frame rates, and actual detector throughput should be distinguished. No numerical values for these outcomes are available at present.
+
+\section{Limitations and Interpretation}
+\balance
+The selected mechanisms depend on camera and display properties, illumination, motion, compression, and geometric context. They may confuse real surfaces with screen-like evidence or miss attacks lacking visible artifacts. Color-based heuristics also require testing across participants and conditions. Threshold defaults are not a substitute for calibration and held-out evaluation.
+
+The rule-based challenge policy has a fixed sequence length and deadline. Its security, usability, and possible accessibility effects are unmeasured. Session-local state and recent-pass behavior must be considered in repeated-attempt evaluations. Browser-provided frames do not establish a trusted sensor path; digital injection and real-time manipulation require a separate threat analysis.
+
+The report cannot conclude that adding multiple cues improves resistance, that strong-pool sequences are more effective, or that the implementation generalizes across devices. Such conclusions require observations and, where relevant, controlled comparisons. Its present value is a clear account of the implemented system and the procedure needed to produce defensible evidence.
+
+\section{Conclusion}
+The web V4.4 implementation integrates pretrained face analysis, passive and temporal cues, suspicion-based challenge selection, and attendance storage in a shared backend runtime. This report explains the implemented decisions and defines adaptive behavior as rule-based selection rather than policy learning. The design can be documented without changing its algorithms. Empirical attack resistance, recognition outcomes, interaction burden, and performance remain open until the proposed evaluation is carried out.
+
+\begin{thebibliography}{7}
+\bibitem{arcface}
+J. Deng, J. Guo, N. Xue, and S. Zafeiriou, ``ArcFace: Additive angular margin loss for deep face recognition,'' arXiv:1801.07698v3, 2019. [Online]. Available: \url{https://arxiv.org/abs/1801.07698v3}
+
+\bibitem{scrfd}
+J. Guo, J. Deng, A. Lattas, and S. Zafeiriou, ``Sample and computation redistribution for efficient face detection,'' arXiv:2105.04714, 2021. [Online]. Available: \url{https://arxiv.org/abs/2105.04714}
+
+\bibitem{padintro}
+J. Hernandez-Ortega, J. Fierrez, A. Morales, and J. Galbally, ``Introduction to presentation attack detection in face biometrics and recent advances,'' arXiv:2111.11794v2, 2021. [Online]. Available: \url{https://arxiv.org/abs/2111.11794v2}
+
+\bibitem{nistpad}
+M. Ngan, P. Grother, K. Hanaoka, A. Hom, and J. Yang, ``Face Recognition Vendor Test: Performance of automated presentation attack detection algorithms---Concept, evaluation plan, and API,'' NIST, ver. 1.1, Sep. 21, 2022. [Online]. Available: \url{https://pages.nist.gov/frvt/api/FRVT_pad_api_v1.1.pdf}
+
+\bibitem{repository}
+sangvo1233-byte, ``face-reg-final-project,'' GitHub repository, commit \texttt{4a38c61}. Accessed: Oct. 1, 2026. [Online]. Available: \url{https://github.com/sangvo1233-byte/face-reg-final-project}
+
+\bibitem{modelzoo}
+InsightFace, ``InsightFace Python Library: Model zoo,'' version v0.7 documentation. Accessed: Oct. 1, 2026. [Online]. Available: \url{https://github.com/deepinsight/insightface/blob/v0.7/python-package/README.md}
+
+\bibitem{mediapipe}
+Google, ``Face landmark detection guide for Python,'' MediaPipe documentation. Accessed: Oct. 1, 2026. [Online]. Available: \url{https://developers.google.com/edge/mediapipe/solutions/vision/face_landmarker/python}
+\end{thebibliography}
+
+\end{document}
